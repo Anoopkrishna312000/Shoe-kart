@@ -198,7 +198,7 @@ export interface Product {
   releaseDate?: string | null;
   images?:
     | {
-        image?: (string | null) | Media;
+        image?: string | null;
         id?: string | null;
       }[]
     | null;

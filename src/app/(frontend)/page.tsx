@@ -1,7 +1,7 @@
 import config from '@payload-config'
 import { getPayload } from 'payload'
 
-import type { Category, Media, Product } from '@/payload-types'
+import type { Category,Product } from '@/payload-types'
 
 import { StorefrontClient, type StorefrontProduct } from './shared/StorefrontClient'
 
@@ -28,7 +28,7 @@ async function getStoreData(): Promise<StoreData> {
         sort: 'name',
       }),
     ])
-
+console.log(JSON.stringify(products, null, 2))
     const sortedProducts = [...products.docs].sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt).getTime()
       const dateB = new Date(b.updatedAt || b.createdAt).getTime()
@@ -51,7 +51,14 @@ async function getStoreData(): Promise<StoreData> {
 
 const getProductImage = (product: Product) => {
   const image = product.images?.[0]?.image
-  return typeof image === 'object' && image ? (image as Media).url : undefined
+
+ 
+  if (typeof image === 'string') {
+    return image
+  }
+
+  
+  return undefined
 }
 
 const getProductMeta = (product: Product) => {
@@ -84,12 +91,29 @@ export default async function Home() {
   const featuredProduct = products.find((product) => product.featured) || products[0]
   const navItems = Array.from(new Set(products.map(getProductCategory).filter((item): item is string => Boolean(item))))
 
-  return (
-    <StorefrontClient
-      featuredImageUrl={featuredProduct ? getProductImage(featuredProduct) : null}
-      featuredTitle={featuredProduct ? featuredProduct.title : 'Create your first sneaker drop in Payload'}
-      navItems={navItems}
-      products={products.map(toStorefrontProduct)}
-    />
-  )
+ return (
+  <StorefrontClient
+    featuredImageUrl={
+      featuredProduct &&
+      typeof featuredProduct.images?.[0]?.image === 'string'
+        ? featuredProduct.images[0].image
+        : null
+    }
+    featuredTitle={
+      featuredProduct
+        ? featuredProduct.title
+        : 'Create your first sneaker drop in Payload'
+    }
+    navItems={navItems}
+  products={products
+  .map((product) => {
+    const image = product.images?.[0]?.image
+
+    if (typeof image !== 'string') return null
+
+    return toStorefrontProduct(product)
+  })
+  .filter((p): p is StorefrontProduct => p !== null)}
+  />
+)
 }
