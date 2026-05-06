@@ -1,7 +1,7 @@
 import config from '@payload-config'
 import { getPayload } from 'payload'
 
-import type { Category,Product } from '@/payload-types'
+import type { Category, Product } from '@/payload-types'
 
 import { StorefrontClient, type StorefrontProduct } from './shared/StorefrontClient'
 
@@ -10,6 +10,11 @@ export const dynamic = 'force-dynamic'
 type StoreData = {
   categories: Category[]
   products: Product[]
+}
+
+type ProductImageValue = {
+  secure_url?: unknown
+  url?: unknown
 }
 
 async function getStoreData(): Promise<StoreData> {
@@ -28,7 +33,7 @@ async function getStoreData(): Promise<StoreData> {
         sort: 'name',
       }),
     ])
-console.log(JSON.stringify(products, null, 2))
+
     const sortedProducts = [...products.docs].sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt).getTime()
       const dateB = new Date(b.updatedAt || b.createdAt).getTime()
@@ -49,16 +54,27 @@ console.log(JSON.stringify(products, null, 2))
   }
 }
 
-const getProductImage = (product: Product) => {
-  const image = product.images?.[0]?.image
-
-  // ✅ ONLY accept string URLs
-  if (typeof image === 'string') {
+const toImageUrl = (image: unknown) => {
+  if (typeof image === 'string' && image.trim()) {
     return image
+  }
+
+  if (image && typeof image === 'object') {
+    const { secure_url: secureUrl, url } = image as ProductImageValue
+
+    if (typeof secureUrl === 'string' && secureUrl.trim()) {
+      return secureUrl
+    }
+
+    if (typeof url === 'string' && url.trim()) {
+      return url
+    }
   }
 
   return null
 }
+
+const getProductImage = (product: Product) => toImageUrl(product.images?.[0]?.image)
 
 const getProductMeta = (product: Product) => {
   if (product.brand) return product.brand
@@ -88,31 +104,15 @@ const toStorefrontProduct = (product: Product): StorefrontProduct => ({
 export default async function Home() {
   const { products } = await getStoreData()
   const featuredProduct = products.find((product) => product.featured) || products[0]
+  const featuredImageUrl = featuredProduct ? getProductImage(featuredProduct) : null
   const navItems = Array.from(new Set(products.map(getProductCategory).filter((item): item is string => Boolean(item))))
 
- return (
-  <StorefrontClient
-    featuredImageUrl={
-      featuredProduct &&
-      typeof featuredProduct.images?.[0]?.image === 'string'
-        ? featuredProduct.images[0].image
-        : null
-    }
-    featuredTitle={
-      featuredProduct
-        ? featuredProduct.title
-        : 'Create your first sneaker drop in Payload'
-    }
-    navItems={navItems}
-  products={products
-  .map((product) => {
-    const image = product.images?.[0]?.image
-
-    if (typeof image !== 'string') return null
-
-    return toStorefrontProduct(product)
-  })
-  .filter((p): p is StorefrontProduct => p !== null)}
-  />
-)
+  return (
+    <StorefrontClient
+      featuredImageUrl={featuredImageUrl}
+      featuredTitle={featuredProduct ? featuredProduct.title : 'Create your first sneaker drop in Payload'}
+      navItems={navItems}
+      products={products.map(toStorefrontProduct)}
+    />
+  )
 }
