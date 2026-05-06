@@ -52,13 +52,12 @@ console.log(JSON.stringify(products, null, 2))
 const getProductImage = (product: Product) => {
   const image = product.images?.[0]?.image
 
- 
+  // ✅ ONLY accept string URLs
   if (typeof image === 'string') {
     return image
   }
 
-  
-  return undefined
+  return null
 }
 
 const getProductMeta = (product: Product) => {
