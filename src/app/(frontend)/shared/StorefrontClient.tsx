@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createCartItem, readCartFromStorage, type CartItem, writeCartToStorage } from './cart-store'
 
 export type StorefrontProduct = {
   badge?: string | null
@@ -11,16 +12,6 @@ export type StorefrontProduct = {
   imageUrl?: string | null
   meta: string
   price: number
-  stock: number
-  title: string
-}
-
-type CartItem = {
-  brand?: string | null
-  id: string
-  imageUrl?: string | null
-  price: number
-  quantity: number
   stock: number
   title: string
 }
@@ -44,45 +35,6 @@ const searchableText = (product: StorefrontProduct) =>
     .join(' ')
     .toLowerCase()
 
-const cartStorageKey = 'kickscrew-cart'
-
-const readCartFromStorage = (): CartItem[] => {
-  if (typeof window === 'undefined') return []
-
-  try {
-    const stored = window.localStorage.getItem(cartStorageKey)
-    if (!stored) return []
-
-    const parsed = JSON.parse(stored) as unknown
-    if (!Array.isArray(parsed)) return []
-
-    const cartItems = parsed.reduce<CartItem[]>((items, item) => {
-      if (!item || typeof item !== 'object') return items
-
-      const candidate = item as Partial<CartItem>
-      if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return items
-      if (typeof candidate.price !== 'number' || typeof candidate.quantity !== 'number') return items
-      if (typeof candidate.stock !== 'number') return items
-
-      items.push({
-        brand: candidate.brand ?? null,
-        id: candidate.id,
-        imageUrl: candidate.imageUrl ?? null,
-        price: candidate.price,
-        quantity: candidate.quantity,
-        stock: candidate.stock,
-        title: candidate.title,
-      })
-
-      return items
-    }, [])
-
-    return cartItems
-  } catch {
-    return []
-  }
-}
-
 export function StorefrontClient({ featuredImageUrl, featuredTitle, navItems, products }: StorefrontClientProps) {
   const [query, setQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
@@ -97,7 +49,7 @@ export function StorefrontClient({ featuredImageUrl, featuredTitle, navItems, pr
 
   useEffect(() => {
     if (typeof window === 'undefined' || !cartReady) return
-    window.localStorage.setItem(cartStorageKey, JSON.stringify(cartItems))
+    writeCartToStorage(cartItems)
   }, [cartItems, cartReady])
 
   const filteredProducts = useMemo(() => {
@@ -126,15 +78,7 @@ export function StorefrontClient({ featuredImageUrl, featuredTitle, navItems, pr
 
       return [
         ...current,
-        {
-          brand: product.brand ?? null,
-          id: product.id,
-          imageUrl: product.imageUrl ?? null,
-          price: product.price,
-          quantity: 1,
-          stock: product.stock,
-          title: product.title,
-        },
+        createCartItem(product),
       ]
     })
   }
@@ -184,7 +128,7 @@ export function StorefrontClient({ featuredImageUrl, featuredTitle, navItems, pr
             <span>Kicks</span>
             <span>Crew</span>
           </a>
-          <a className="cart-pill" href="#cart">
+          <a className="cart-pill" href="/cart">
             Cart <span>{cartCount}</span>
           </a>
         </div>
@@ -234,128 +178,67 @@ export function StorefrontClient({ featuredImageUrl, featuredTitle, navItems, pr
           </div>
         </div>
 
-        <div className="store-layout">
-          <div className="store-main">
-            {products.length ? (
-              visibleProducts.length ? (
-                <div className="product-grid">
-                  {visibleProducts.map((product, index) => {
-                    const inCart = cartItems.find((item) => item.id === product.id)
-                    const isAtLimit = Boolean(inCart && inCart.quantity >= product.stock)
+        {products.length ? (
+          visibleProducts.length ? (
+            <div className="product-grid">
+              {visibleProducts.map((product, index) => {
+                const inCart = cartItems.find((item) => item.id === product.id)
+                const isAtLimit = Boolean(inCart && inCart.quantity >= product.stock)
 
-                    return (
-                      <article className="product-card" key={product.id}>
-                        <div className="product-image">
-                          {product.imageUrl ? (
-                            <img src={product.imageUrl} alt={product.title} />
-                          ) : (
-                            <div className={`shoe-fallback shoe-fallback-${(index % 6) + 1}`} aria-hidden="true">
-                              <span />
-                            </div>
-                          )}
-                          {product.badge && <span className="product-badge">{product.badge}</span>}
+                return (
+                  <article className="product-card" key={product.id}>
+                    <div className="product-image">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.title} />
+                      ) : (
+                        <div className={`shoe-fallback shoe-fallback-${(index % 6) + 1}`} aria-hidden="true">
+                          <span />
                         </div>
-                        <div className="product-details">
-                          <p className="product-brand">{product.meta}</p>
-                          <h3>{product.title}</h3>
-                          <div className="product-card-footer">
-                            <p className="product-price">From {currencyFormatter.format(product.price)}</p>
-                            <p className="stock-status">{product.stock > 0 ? 'Available now' : 'Out of stock'}</p>
-                          </div>
-                          <button
-                            className="add-to-cart"
-                            type="button"
-                            disabled={product.stock <= 0 || isAtLimit}
-                            onClick={() => addToCart(product)}
-                          >
-                            {product.stock <= 0 ? 'Out of stock' : isAtLimit ? 'Added' : 'Add to cart'}
-                          </button>
-                        </div>
-                      </article>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="empty-store">
-                  <h3>No matching pairs</h3>
-                  <p>Try searching by brand, model, category, colorway, or badge.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery('')
-                      setSelectedCategory('')
-                    }}
-                  >
-                    Clear Search
-                  </button>
-                </div>
-              )
-            ) : (
-              <div className="empty-store">
-                <h3>No products yet</h3>
-                <p>Add sneakers from the Payload admin panel and they will appear here automatically.</p>
-                <a href="/admin/collections/products">Create Product</a>
-              </div>
-            )}
-          </div>
-
-          <aside className="cart-panel" id="cart" aria-label="Cart summary">
-            <div className="cart-panel-head">
-              <div>
-                <p className="cart-kicker">Cart</p>
-                <h3>Your picks</h3>
-              </div>
-              <span className="cart-count">{cartCount}</span>
-            </div>
-
-            {cartItems.length ? (
-              <>
-                <div className="cart-list">
-                  {cartItems.map((item) => (
-                    <div className="cart-item" key={item.id}>
-                      <div className="cart-item-image">
-                        {item.imageUrl ? <img src={item.imageUrl} alt="" aria-hidden="true" /> : <span aria-hidden="true" />}
-                      </div>
-                      <div className="cart-item-body">
-                        <p>{item.brand || 'Sneaker'}</p>
-                        <h4>{item.title}</h4>
-                        <div className="cart-item-meta">
-                          <span>{currencyFormatter.format(item.price)}</span>
-                          <span>Qty {item.quantity}</span>
-                        </div>
-                        <div className="cart-item-actions">
-                          <button type="button" onClick={() => updateCartQuantity(item.id, -1)}>
-                            -
-                          </button>
-                          <button type="button" onClick={() => updateCartQuantity(item.id, 1)} disabled={item.quantity >= item.stock}>
-                            +
-                          </button>
-                          <button type="button" onClick={() => removeFromCart(item.id)}>
-                            Remove
-                          </button>
-                        </div>
-                      </div>
+                      )}
+                      {product.badge && <span className="product-badge">{product.badge}</span>}
                     </div>
-                  ))}
-                </div>
-                <div className="cart-total">
-                  <div>
-                    <span>Subtotal</span>
-                    <strong>{currencyFormatter.format(cartSubtotal)}</strong>
-                  </div>
-                  <p>Shipping and taxes are shown at checkout.</p>
-                </div>
-                <button className="checkout-button" type="button">
-                  Checkout
-                </button>
-              </>
-            ) : (
-              <div className="cart-empty">
-                <p>Add a pair to start building your cart.</p>
-              </div>
-            )}
-          </aside>
-        </div>
+                    <div className="product-details">
+                      <p className="product-brand">{product.meta}</p>
+                      <h3>{product.title}</h3>
+                      <div className="product-card-footer">
+                        <p className="product-price">From {currencyFormatter.format(product.price)}</p>
+                        <p className="stock-status">{product.stock > 0 ? 'Available now' : 'Out of stock'}</p>
+                      </div>
+                      <button
+                        className="add-to-cart"
+                        type="button"
+                        disabled={product.stock <= 0 || isAtLimit}
+                        onClick={() => addToCart(product)}
+                      >
+                        {product.stock <= 0 ? 'Out of stock' : isAtLimit ? 'Added' : 'Add to cart'}
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="empty-store">
+              <h3>No matching pairs</h3>
+              <p>Try searching by brand, model, category, colorway, or badge.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('')
+                  setSelectedCategory('')
+                }}
+              >
+                Clear Search
+              </button>
+            </div>
+          )
+        ) : (
+          <div className="empty-store">
+            <h3>No products yet</h3>
+            <p>Add sneakers from the Payload admin panel and they will appear here automatically.</p>
+            <a href="/admin/collections/products">Create Product</a>
+          </div>
+        )}
       </section>
     </div>
   )
