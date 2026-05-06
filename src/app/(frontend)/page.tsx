@@ -18,7 +18,7 @@ async function getStoreData(): Promise<StoreData> {
     const [products, categories] = await Promise.all([
       payload.find({
         collection: 'products',
-        depth: 1,
+        depth: 0,
         limit: 50,
         sort: '-updatedAt',
       }),
