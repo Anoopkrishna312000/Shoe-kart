@@ -8,7 +8,12 @@ const dirname = path.dirname(__filename)
 
 const nextConfig: NextConfig = {
   images: {
-  domains: ['res.cloudinary.com'],
+  remotePatterns: [
+    {
+      protocol: 'https',
+      hostname: 'res.cloudinary.com',
+    },
+  ],
 },
   webpack: (webpackConfig) => {
     webpackConfig.resolve.extensionAlias = {
